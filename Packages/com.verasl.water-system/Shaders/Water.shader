@@ -12,6 +12,8 @@
 		Tags { "RenderType"="Transparent" "Queue"="Transparent-100" "RenderPipeline" = "UniversalPipeline" }
 		ZWrite On
 
+		Blend SrcAlpha OneMinusSrcAlpha // Traditional transparency
+
 		Pass
 		{
 			Name "WaterShading"
@@ -24,7 +26,7 @@
 			#pragma multi_compile _ USE_STRUCTURED_BUFFER
 			#pragma shader_feature _ _STATIC_SHADER
 			#pragma shader_feature _DEBUG_OFF _DEBUG_SSS _DEBUG_REFRACTION _DEBUG_REFLECTION _DEBUG_NORMAL _DEBUG_FRESNEL _DEBUG_WATEREFFECTS _DEBUG_FOAM _DEBUG_WATERDEPTH
-						
+
 			// -------------------------------------
             // Lightweight Pipeline keywords
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS

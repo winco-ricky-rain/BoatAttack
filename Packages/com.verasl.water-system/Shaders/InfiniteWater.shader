@@ -1,155 +1,123 @@
-﻿// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
-
-Shader "Unlit/InfiniteWater"
+﻿Shader "BoatAttack/InfiniteWater"
 {
 	Properties
 	{
-		_MainTex ("Texture", 2D) = "white" {}
 		_Size ("size", float) = 3.0
+		[Toggle(_STATIC_SHADER)] _Static ("Static", Float) = 0
+		_BumpScale("Detail Wave Amount", Range(0, 2)) = 0.2//fine detail multiplier
+		[KeywordEnum(Off, SSS, Refraction, Reflection, Normal, Fresnel, WaterEffects, Foam, WaterDepth)] _Debug ("Debug mode", Float) = 0
 	}
 	SubShader
 	{
 		Tags { "RenderType"="Transparent" "Queue"="Transparent-101" "RenderPipeline" = "UniversalPipeline" }
-		LOD 100
+		ZWrite off
 
 		Pass
 		{
-			ZWrite On
+			Name "InfiniteWaterShading"
+			Tags{"LightMode" = "UniversalForward"}
 
 			HLSLPROGRAM
-			#pragma vertex vert
-			#pragma fragment frag
+			#pragma prefer_hlslcc gles
+			/////////////////SHADER FEATURES//////////////////
+			#pragma shader_feature _REFLECTION_CUBEMAP _REFLECTION_PROBES _REFLECTION_PLANARREFLECTION
+			#pragma shader_feature _ _STATIC_SHADER
+			#pragma shader_feature _DEBUG_OFF _DEBUG_SSS _DEBUG_REFRACTION _DEBUG_REFLECTION _DEBUG_NORMAL _DEBUG_FRESNEL _DEBUG_WATEREFFECTS _DEBUG_FOAM _DEBUG_WATERDEPTH
+
+            // -------------------------------------
+            // Lightweight Pipeline keywords
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile _ _ADDITIONAL_LIGHT_SHADOWS
+            #pragma multi_compile _ _SHADOWS_SOFT
+
 			// make fog work
 			#pragma multi_compile_fog
 
-			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-			#include "WaterInput.hlsl"
-			#include "CommonUtilities.hlsl"
-			#include "WaterLighting.hlsl"
+            ////////////////////INCLUDES//////////////////////
+			#include "WaterCommon.hlsl"
+			#include "InfiniteWater.hlsl"
 
-			#define EPSILON 0.00001
+			#pragma vertex InfiniteWaterVertex
+			#pragma fragment InfiniteWaterFragment
 
-			// ray-plane intersection test
-			// @return side of plane hit
-			//    0 : no hit
-			//    1 : front
-			//    2 : back
-			int intersect_plane (float3 ro, float3 rd, float3 po, float3 pd, out float3 hit)
-			{   
-				float D = dot(po, pd);       // re-parameterize plane to normal + distance
-				float tn = D - dot(ro, pd);  // ray pos w.r.t. plane (frnt, back, on)
-				float td = dot (rd, pd);     // ray ori w.r.t. plane (towards, away, parallel)
-				
-				if (td > -EPSILON  &&  td < EPSILON)  return 0;  // parallel to plane
-				
-				float t = tn / td;          // dist along ray to hit
-				if (t < 0.0)  return 0;     // plane lies behind ray
-				hit = ro + t * rd;          // got a hit
-				return (tn > 0.0) ? 2 : 1;  // which side of the plane?
+			Varyings InfiniteWaterVertex(Attributes input)
+			{
+				Varyings output = (Varyings)0;
+
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+
+				output.uv.xy = input.texcoord;
+
+				float3 cameraPosition = GetCameraPositionWS();
+				cameraPosition.y = 0.0;
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz + cameraPosition);
+
+				output.clipPos = vertexInput.positionCS;
+				float3 viewPos = vertexInput.positionVS;
+
+				output.screenPosition = ComputeScreenPos(vertexInput.positionCS);
+
+				output.viewDir.xyz = UNITY_MATRIX_IT_MV[2].xyz;
+				output.viewDir.w = length(viewPos / viewPos.z);
+
+				return output;
 			}
 
-			struct appdata
+			void InfiniteWaterFragment(Varyings i, out half4 outColor:SV_Target, out float outDepth : SV_Depth) //: SV_Target
 			{
-				float4 vertex : POSITION;
-				float2 uv : TEXCOORD0;
-			};
+                half3 screenUV = i.screenPosition.xyz / i.screenPosition.w; // screen UVs
 
-			struct v2f
-			{
-				float2 uv : TEXCOORD0;
-				float4 screenPos : TEXCOORD2;//screen position of the verticies after wave distortion
-				float4 viewDir : TEXCOORD3;
-				float4 vertex : SV_POSITION;
-			};
+                half4 waterFX = SAMPLE_TEXTURE2D(_WaterFXMap, sampler_ScreenTextures_linear_clamp, screenUV.xy);
 
-			sampler2D _MainTex;
-			float4 _MainTex_ST;
-			float _Size;
-			float _CameraRoll;
-			
-			v2f vert (appdata v)
-			{
-				v2f o;
-				float3 posWS = TransformObjectToWorld(v.vertex.xyz);
-				o.vertex = TransformWorldToHClip(posWS);
-				o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-				o.screenPos = ComputeScreenPos(o.vertex);
-				o.viewDir.xyz = UNITY_MATRIX_IT_MV[2].xyz;
-				float3 viewPos = TransformWorldToView(posWS);// posWS - _WorldSpaceCameraPos;
-				o.viewDir.w = length(viewPos / viewPos.z);
-				return o;
-			}
-			
-			void frag (v2f i, out half4 outColor:SV_Target, out float outDepth : SV_Depth) //: SV_Target
-			{
+				InfinitePlane plane = WorldPlane(i.screenPosition, i.viewDir);
+				float3 normal = half3(0.0, 1.0, 0.0);
 
-				float3 viewDir = i.viewDir.xyz; //UNITY_MATRIX_IT_MV[2].xyz;
-				float3 pos = _WorldSpaceCameraPos * viewDir;
-				i.uv = pos.xy;
+                // Depth
+	            float3 depth = WaterDepth(plane.positionWS, 0.0, screenUV.xy);
 
-				//////
-				float4 p = i.screenPos;
-				float2 uv = p.xy / p.w; // [0, 1]
-				half2 st = 2.0 * uv - half2(1.0, 1.0);  
+	            // Detail waves
+                DetailNormals(normal, DetailUVs(plane.positionWS * (1 / _Size), 1.0), waterFX, depth);
 
-				float asp =  _ScreenParams.x /  _ScreenParams.y;
-				
-				float2 st_adj = float2(st.x * asp, st.y);
-				
-				// camera settings
-				//float dist = 2.0 + 0.5*sin(0.5*Time);
-				//float theta = 0.1230596391*_Time.y;
-				// float cx = dist * sin(theta);
-				// float cz = dist * cos(theta);
-				float3 cam_ori = float3(-_WorldSpaceCameraPos.x, _WorldSpaceCameraPos.y, _WorldSpaceCameraPos.z);
-				// vec3 cam_look = vec3(0.0, 0.50, 0.0);
-				float3 cam_dir = float3(viewDir.x, -viewDir.y, -viewDir.z);
-				
-				// over, up, norm basis vectors for camera
-				half zRot = radians(-_CameraRoll);
-				float3 cam_ovr = normalize(cross(cam_dir, half3(0, cos(zRot), sin(zRot))));
-				float3 cam_uhp = normalize(cross(cam_ovr, cam_dir));
-				
-				// scene
-				float3 po = 0;
-				float3 pd = half3(0.0, 1.0, 0.0);
-				
-				// ray
-				half3 ro = cam_ori;
+                // Lighting
+                Light mainLight = GetMainLight(TransformWorldToShadowCoord(plane.positionWS));
+                half shadow = SoftShadows(screenUV, plane.positionWS);
+                half3 GI = SampleSH(normal);
 
-				float cam_dist = unity_CameraProjection._m11;//80 degrees = 1.2
-				float3 rt = cam_ori + cam_dist*cam_dir;
-				rt += st_adj.x * cam_ovr;
-				rt += st_adj.y * cam_uhp;
-				half3 rd = normalize(rt - cam_ori);
-				
-				float3 hit;
-				int side = intersect_plane (ro, rd, po, pd, hit);
-				if(side == 0)
-					discard;
+                // SSS
+                half3 directLighting = dot(mainLight.direction, half3(0, 1, 0)) * mainLight.color;
+                directLighting += saturate(pow(dot(i.viewDir.xyz, -mainLight.direction) * 1, 3)) * 5 * mainLight.color;
+                half3 sss = directLighting * shadow + GI;
 
-				//half fog = pow(1-abs(rd.y), 20);
-				// plane
-				//  - figure out UV on plane to sample texture
-				half3 dee = hit;
-				float tSize = 0.05;
-				float2 p_uv = float2(dot(dee, half3(1, 0, 0)) * tSize, dot(dee, half3(0, 0, 1)) * tSize);
-	///
-	// sample the texture
-				half4 col = tex2D(_MainTex, p_uv);
+				half4 col = SAMPLE_TEXTURE2D(_SurfaceMap, sampler_SurfaceMap, plane.positionWS.xz);
 
-				//re-construct depth
-				half3 camPos = _WorldSpaceCameraPos;
-				float a = _ProjectionParams.z / ( _ProjectionParams.z - _ProjectionParams.y );
-				float b = _ProjectionParams.z * _ProjectionParams.y / ( _ProjectionParams.y - _ProjectionParams.z );
-				float z = length(hit + half3(camPos.x, camPos.y + 1, -camPos.z)) / i.viewDir.w;
-				float d =  a + b / z;
-				// apply fog
-				//UNITY_APPLY_FOG(i.fogCoord, col);
-				//return float4(col);
-				//outColor = half4(i.viewDir.xyz, 1);
-				outColor = half4(frac(p_uv), frac(1-d), 1);
-				outDepth = 1-d;
+
+                half lighting = dot(normal,  mainLight.direction);
+
+                // Fresnel
+	            half fresnelTerm = CalculateFresnelTerm(normal, i.viewDir.xyz);
+
+    BRDFData brdfData;
+    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, 1, brdfData);
+	half3 spec = DirectBDRF(brdfData, normal, mainLight.direction, i.viewDir.xyz) * shadow * mainLight.color;
+
+float tempdepth = 2;
+                sss *= Scattering(depth.x);
+
+                // Reflections
+	            half3 reflection = SampleReflections(normal, i.viewDir.xyz, screenUV.xy, 0.0);
+
+                // Refraction
+                half3 refraction = Refraction(screenUV, depth.x);
+
+	// Do compositing
+	half3 comp = lerp(refraction, reflection, fresnelTerm) + sss + spec; //lerp(refraction, color + reflection + foam, 1-saturate(1-depth.x * 25));
+
+
+				//outColor = half4(reflection * fresnelTerm + spec, 1);
+				outColor = half4(comp, 1);
+				outDepth = 1-plane.depth;
 			}
 			ENDHLSL
 		}
