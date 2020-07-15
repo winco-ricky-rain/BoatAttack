@@ -3,6 +3,7 @@
 	Properties
 	{
 		_Size ("size", float) = 3.0
+		_DitherPattern ("Dithering Pattern", 2D) = "bump" {}
 		[Toggle(_STATIC_SHADER)] _Static ("Static", Float) = 0
 		_BumpScale("Detail Wave Amount", Range(0, 2)) = 0.2//fine detail multiplier
 		[KeywordEnum(Off, SSS, Refraction, Reflection, Normal, Fresnel, WaterEffects, Foam, WaterDepth)] _Debug ("Debug mode", Float) = 0
@@ -73,9 +74,11 @@
 
 				InfinitePlane plane = WorldPlane(i.screenPosition, i.viewDir);
 				float3 normal = half3(0.0, 1.0, 0.0);
+                half3 viewDirectionWS = normalize(GetCameraPositionWS() - plane.positionWS);
+				float4 additionalData = float4(1, length(viewDirectionWS), waterFX.w, 1);
 
                 // Depth
-	            float3 depth = WaterDepth(plane.positionWS, 0.0, screenUV.xy);
+	            float3 depth = WaterDepth(plane.positionWS, additionalData, screenUV.xy);
 
 	            // Detail waves
                 DetailNormals(normal, DetailUVs(plane.positionWS * (1 / _Size), 1.0), waterFX, depth);
@@ -87,7 +90,7 @@
 
                 // SSS
                 half3 directLighting = dot(mainLight.direction, half3(0, 1, 0)) * mainLight.color;
-                directLighting += saturate(pow(dot(i.viewDir.xyz, -mainLight.direction) * 1, 3)) * 5 * mainLight.color;
+                directLighting += saturate(pow(dot(viewDirectionWS, -mainLight.direction) * 1, 3)) * 5 * mainLight.color;
                 half3 sss = directLighting * shadow + GI;
 
 				half4 col = SAMPLE_TEXTURE2D(_SurfaceMap, sampler_SurfaceMap, plane.positionWS.xz);
@@ -96,17 +99,17 @@
                 half lighting = dot(normal,  mainLight.direction);
 
                 // Fresnel
-	            half fresnelTerm = CalculateFresnelTerm(normal, i.viewDir.xyz);
+	            half fresnelTerm = CalculateFresnelTerm(normal, viewDirectionWS);
 
     BRDFData brdfData;
     InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, 1, brdfData);
-	half3 spec = DirectBDRF(brdfData, normal, mainLight.direction, i.viewDir.xyz) * shadow * mainLight.color;
+	half3 spec = DirectBDRF(brdfData, normal, mainLight.direction, viewDirectionWS) * shadow * mainLight.color;
 
 float tempdepth = 2;
                 sss *= Scattering(depth.x);
 
                 // Reflections
-	            half3 reflection = SampleReflections(normal, i.viewDir.xyz, screenUV.xy, 0.0);
+	            half3 reflection = SampleReflections(normal, viewDirectionWS, screenUV.xy, 0.0);
 
                 // Refraction
                 half3 refraction = Refraction(screenUV, depth.x);

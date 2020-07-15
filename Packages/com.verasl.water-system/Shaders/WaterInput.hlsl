@@ -33,13 +33,26 @@ TEXTURE2D(_SurfaceMap); SAMPLER(sampler_SurfaceMap);
 TEXTURE2D(_FoamMap); SAMPLER(sampler_FoamMap);
 TEXTURE2D(_DitherPattern); SAMPLER(sampler_DitherPattern);
 
-// Must match Lightweigth ShaderGraph master node
-struct SurfaceData
+struct WaterSurfaceData
 {
-    half3 absorption;
-	half3 scattering;
-    half3 normal;
-    half  foam;
+    half3   absorption;
+	half3   scattering;
+    half3   normal;
+    half    foam;
+    half    foamMask;
+};
+
+struct WaterInputData
+{
+    float3 positionWS;
+    half3 normalWS;
+    half3 viewDirectionWS;
+    float2 reflectionUV;
+    float2 refractionUV;
+    float4 shadowCoord;
+    half fogCoord;
+    float depth;
+    half3 GI;
 };
 
 #endif // WATER_INPUT_INCLUDED

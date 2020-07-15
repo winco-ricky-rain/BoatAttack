@@ -46,11 +46,11 @@ half3 Highlights(half3 positionWS, half roughness, half3 normalWS, half3 viewDir
 }
 
 //Soft Shadows
-half SoftShadows(float3 screenUV, float3 positionWS)
+half SoftShadows(float2 screenUV, float3 positionWS)
 {
-    half2 jitterUV = screenUV.xy * _ScreenParams.xy * _DitherPattern_TexelSize.xy;
+    half2 jitterUV = screenUV * _ScreenParams.xy * _DitherPattern_TexelSize.xy;
 	half shadowAttenuation = 0;
-	
+
 	uint loop = 4;
 	float loopDiv = 1.0 / loop;
 	for (uint i = 0u; i < loop; ++i)
