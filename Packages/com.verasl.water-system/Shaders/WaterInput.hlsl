@@ -37,7 +37,7 @@ struct WaterSurfaceData
 {
     half3   absorption;
 	half3   scattering;
-    half3   normal;
+    half3   normalWS;
     half    foam;
     half    foamMask;
 };

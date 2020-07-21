@@ -60,8 +60,8 @@
 
 				output.screenPosition = ComputeScreenPos(vertexInput.positionCS);
 
-				output.viewDir.xyz = UNITY_MATRIX_IT_MV[2].xyz;
-				output.viewDir.w = length(viewPos / viewPos.z);
+				output.viewDirectionWS.xyz = UNITY_MATRIX_IT_MV[2].xyz;
+				output.viewDirectionWS.w = length(viewPos / viewPos.z);
 
 				return output;
 			}
@@ -72,7 +72,7 @@
 
                 half4 waterFX = SAMPLE_TEXTURE2D(_WaterFXMap, sampler_ScreenTextures_linear_clamp, screenUV.xy);
 
-				InfinitePlane plane = WorldPlane(i.screenPosition, i.viewDir);
+				InfinitePlane plane = WorldPlane(i.screenPosition, i.viewDirectionWS);
 				float3 normal = half3(0.0, 1.0, 0.0);
                 half3 viewDirectionWS = normalize(GetCameraPositionWS() - plane.positionWS);
 				float4 additionalData = float4(1, length(viewDirectionWS), waterFX.w, 1);
