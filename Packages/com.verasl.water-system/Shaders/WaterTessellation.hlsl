@@ -7,9 +7,9 @@
 
 struct TessellationControlPoint
 {
-	float4 vertex : INTERNALTESSPOS;
-	float4	texcoord 				: TEXCOORD0;	// Geometric UVs stored in xy, and world(pre-waves) in zw
-	float3	posWS					: TEXCOORD1;	// world position of the vertices
+	float4 positionOS               : INTERNALTESSPOS;
+	float4 texcoord 				: TEXCOORD0;	// Geometric UVs stored in xy, and world(pre-waves) in zw
+	float3 positionWS				: TEXCOORD1;	// world position of the vertices
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -25,7 +25,7 @@ struct HS_ConstantOutput
 
 half _TessellationEdgeLength;
 
-float TessellationEdgeFactor (float3 p0, float3 p1) 
+float TessellationEdgeFactor (float3 p0, float3 p1)
 {
     float edgeLength = distance(p0, p1);
 
@@ -35,30 +35,29 @@ float TessellationEdgeFactor (float3 p0, float3 p1)
     return edgeLength * _ScreenParams.y / (_TessellationEdgeLength * viewDistance);
 }
 
-TessellationControlPoint TessellationVertex( WaterVertexInput v )
+TessellationControlPoint TessellationVertex( Attributes input )
 {
-    TessellationControlPoint o;
-    o.vertex = v.vertex;
-    o.posWS = TransformObjectToWorld(v.vertex.xyz);
-    o.texcoord.xy = v.texcoord;
-    o.texcoord.zw = o.posWS.xz;
-    //o.color = v.color;
-    return o;
+    TessellationControlPoint output;
+    output.positionWS = TransformObjectToWorld(input.positionOS.xyz);
+    output.positionOS = input.positionOS;
+    output.texcoord.xy = input.texcoord;
+    output.texcoord.zw = output.positionWS.xz;
+    return output;
 }
 
 HS_ConstantOutput HSConstant( InputPatch<TessellationControlPoint, 3> Input )
 {
-    float3 p0 = TransformObjectToWorld(Input[0].vertex.xyz);
-    float3 p1 = TransformObjectToWorld(Input[1].vertex.xyz);
-    float3 p2 = TransformObjectToWorld(Input[2].vertex.xyz);
-    HS_ConstantOutput o = (HS_ConstantOutput)0;
-    o.TessFactor[0] = TessellationEdgeFactor(p1, p2);
-    o.TessFactor[1] = TessellationEdgeFactor(p2, p0);
-    o.TessFactor[2] = TessellationEdgeFactor(p0, p1);
-    o.InsideTessFactor = (TessellationEdgeFactor(p1, p2) + 
-                                TessellationEdgeFactor(p2, p0) + 
+    float3 p0 = TransformObjectToWorld(Input[0].positionOS.xyz);
+    float3 p1 = TransformObjectToWorld(Input[1].positionOS.xyz);
+    float3 p2 = TransformObjectToWorld(Input[2].positionOS.xyz);
+    HS_ConstantOutput output = (HS_ConstantOutput)0;
+    output.TessFactor[0] = TessellationEdgeFactor(p1, p2);
+    output.TessFactor[1] = TessellationEdgeFactor(p2, p0);
+    output.TessFactor[2] = TessellationEdgeFactor(p0, p1);
+    output.InsideTessFactor = (TessellationEdgeFactor(p1, p2) +
+                                TessellationEdgeFactor(p2, p0) +
                                 TessellationEdgeFactor(p0, p1)) * (1 / 3.0);
-    return o;
+    return output;
 }
 
 [domain("tri")]
@@ -75,24 +74,24 @@ TessellationControlPoint Hull( InputPatch<TessellationControlPoint, 3> Input, ui
 
 // Domain: replaces vert for tessellation version
 [domain("tri")]
-WaterVertexOutput Domain( HS_ConstantOutput HSConstantData, const OutputPatch<TessellationControlPoint, 3> Input, float3 BarycentricCoords : SV_DomainLocation)
+Varyings Domain( HS_ConstantOutput HSConstantData, const OutputPatch<TessellationControlPoint, 3> input, float3 BarycentricCoords : SV_DomainLocation)
 {
-    WaterVertexOutput o = (WaterVertexOutput)0;
-    UNITY_SETUP_INSTANCE_ID(v);
-    UNITY_TRANSFER_INSTANCE_ID(v, o);
-	UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+    Varyings output = (Varyings)0;
+    UNITY_SETUP_INSTANCE_ID(input);
+    UNITY_TRANSFER_INSTANCE_ID(input, output);
+	UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
 	/////////////////////Tessellation////////////////////////
 	float fU = BarycentricCoords.x;
 	float fV = BarycentricCoords.y;
 	float fW = BarycentricCoords.z;
 
-	float4 vertex = Input[0].vertex * fU + Input[1].vertex * fV + Input[2].vertex * fW;
-	o.uv = Input[0].texcoord * fU + Input[1].texcoord * fV + Input[2].texcoord * fW;
-	o.posWS = Input[0].posWS * fU + Input[1].posWS * fV + Input[2].posWS * fW;
+	float4 vertex = input[0].positionOS * fU + input[1].positionOS * fV + input[2].positionOS * fW;
+	output.uv = input[0].texcoord * fU + input[1].texcoord * fV + input[2].texcoord * fW;
+	output.positionWS = input[0].positionWS * fU + input[1].positionWS * fV + input[2].positionWS * fW;
 
-    o = WaveVertexOperations(o);
+    output = WaveVertexOperations(output);
 
-    return o;
+    return output;
 }
 
 #endif // WATER_TESSELLATION_INCLUDED

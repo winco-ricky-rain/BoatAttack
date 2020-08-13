@@ -51,15 +51,14 @@
 
 				output.uv.xy = input.texcoord;
 
-				float3 cameraPosition = GetCameraPositionWS();
-				cameraPosition.y = 0.0;
-                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz + cameraPosition);
-
-				output.clipPos = vertexInput.positionCS;
-				float3 viewPos = vertexInput.positionVS;
-
+				float3 cameraOffset = GetCameraPositionWS();
+				//input.positionOS.y *= abs(cameraOffset.y) + 1;
+				cameraOffset.y *= 0.0;
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz + cameraOffset);
+				output.positionCS = vertexInput.positionCS;
 				output.screenPosition = ComputeScreenPos(vertexInput.positionCS);
 
+				float3 viewPos = vertexInput.positionVS;
 				output.viewDirectionWS.xyz = UNITY_MATRIX_IT_MV[2].xyz;
 				output.viewDirectionWS.w = length(viewPos / viewPos.z);
 
