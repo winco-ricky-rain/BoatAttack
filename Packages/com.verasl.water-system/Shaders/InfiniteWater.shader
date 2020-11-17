@@ -67,7 +67,7 @@
 
 			void InfiniteWaterFragment(Varyings i, out half4 outColor:SV_Target, out float outDepth : SV_Depth) //: SV_Target
 			{
-                half3 screenUV = i.screenPosition.xyz / i.screenPosition.w; // screen UVs
+                half2 screenUV = i.screenPosition.xy / i.screenPosition.w; // screen UVs
 
                 half4 waterFX = SAMPLE_TEXTURE2D(_WaterFXMap, sampler_ScreenTextures_linear_clamp, screenUV.xy);
 
@@ -80,7 +80,7 @@
 	            float3 depth = WaterDepth(plane.positionWS, additionalData, screenUV.xy);
 
 	            // Detail waves
-                DetailNormals(normal, DetailUVs(plane.positionWS * (1 / _Size), 1.0), waterFX, depth);
+                DetailNormals(normal, DetailUVs(plane.positionWS * (1 / _Size), 1.0), waterFX, depth.x);
 
                 // Lighting
                 Light mainLight = GetMainLight(TransformWorldToShadowCoord(plane.positionWS));
@@ -101,7 +101,8 @@
 	            half fresnelTerm = CalculateFresnelTerm(normal, viewDirectionWS);
 
     BRDFData brdfData;
-    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, 1, brdfData);
+    half alpha = 1.0f;
+    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, alpha, brdfData);
 	half3 spec = DirectBDRF(brdfData, normal, mainLight.direction, viewDirectionWS) * shadow * mainLight.color;
 
 float tempdepth = 2;

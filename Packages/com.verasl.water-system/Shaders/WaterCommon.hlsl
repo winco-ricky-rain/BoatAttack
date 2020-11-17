@@ -99,7 +99,7 @@ float4 DetailUVs(float3 positionWS, half noise)
     return output;
 }
 
-void DetailNormals(inout float3 normalWS, float4 uvs, float4 waterFX, float depth)
+void DetailNormals(inout float3 normalWS, float4 uvs, half4 waterFX, float depth)
 {
     half2 detailBump1 = SAMPLE_TEXTURE2D(_SurfaceMap, sampler_SurfaceMap, uvs.zw).xy * 2 - 1;
 	half2 detailBump2 = SAMPLE_TEXTURE2D(_SurfaceMap, sampler_SurfaceMap, uvs.xy).xy * 2 - 1;
@@ -165,7 +165,7 @@ void InitializeInputData(Varyings input, out WaterInputData inputData, float2 sc
 
     inputData.positionWS = input.positionWS;
     inputData.normalWS = input.normalWS;
-    inputData.viewDirectionWS = input.viewDirectionWS;
+    inputData.viewDirectionWS = input.viewDirectionWS.xyz;
     inputData.reflectionUV = 0;
 
     inputData.detailUV = input.uv;
@@ -217,7 +217,8 @@ float3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float2 s
     //half3 sss = directLighting * shadow + GI;
 
     BRDFData brdfData;
-    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, 1, brdfData);
+    half alpha = 1;
+    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, alpha, brdfData);
 	half3 spec = DirectBDRF(brdfData, input.normalWS, mainLight.direction, input.viewDirectionWS);// * shadow * mainLight.color;
 
     // Fresnel
@@ -326,9 +327,9 @@ half4 WaterFragment(Varyings IN) : SV_Target
 	half fresnelTerm = CalculateFresnelTerm(IN.normalWS, IN.viewDirectionWS.xyz);
 
     BRDFData brdfData;
-    half alpha = 1;
-    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, alpha, brdfData);
-	half3 spec = DirectBDRF(brdfData, IN.normal, mainLight.direction, IN.viewDir) * shadow * mainLight.color;
+    half a = 1;
+    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, a, brdfData);
+	half3 spec = DirectBDRF(brdfData, IN.normalWS, mainLight.direction, IN.viewDirectionWS.xyz) * shadow * mainLight.color;
 #ifdef _ADDITIONAL_LIGHTS
     uint pixelLightCount = GetAdditionalLightsCount();
     for (uint lightIndex = 0u; lightIndex < pixelLightCount; ++lightIndex)
