@@ -6,10 +6,11 @@
 CBUFFER_START(UnityPerMaterial)
 half _BumpScale;
 half4 _DitherPattern_TexelSize;
+int _DebugPass;
 CBUFFER_END
+
 half _MaxDepth;
 half _MaxWaveHeight;
-int _DebugPass;
 half4 _VeraslWater_DepthCamParams;
 float4x4 _InvViewProjection;
 

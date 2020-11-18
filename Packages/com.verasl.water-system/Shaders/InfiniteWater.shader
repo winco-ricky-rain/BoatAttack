@@ -83,64 +83,19 @@
                 i.normalWS = half3(0.0, 1.0, 0.0);
                 i.viewDirectionWS = normalize(GetCameraPositionWS() - plane.positionWS).xyzz;
                 i.additionalData = additionalData;
-                //i.uv = 
+                i.uv = DetailUVs(plane.positionWS * (1 / _Size), 1);
 
                 WaterInputData inputData;
                 InitializeInputData(i, inputData, screenUV.xy);
 
                 WaterSurfaceData surfaceData;
                 InitializeSurfaceData(inputData, surfaceData);
-            
+
                 half4 color;
                 color.a = 1;
                 color.rgb = WaterShading(inputData, surfaceData, additionalData, screenUV.xy);
-            
+
                 outColor = color;
-
-                // Depth
-	            float3 depth = WaterDepth(plane.positionWS, additionalData, screenUV.xy);
-
-	            // Detail waves
-                DetailNormals(normal, DetailUVs(plane.positionWS * (1 / _Size), 1.0), waterFX, depth.x);
-
-                // Lighting
-                Light mainLight = GetMainLight(TransformWorldToShadowCoord(plane.positionWS));
-                half shadow = SoftShadows(screenUV, plane.positionWS);
-                half3 GI = SampleSH(normal);
-
-                // SSS
-                half3 directLighting = dot(mainLight.direction, half3(0, 1, 0)) * mainLight.color;
-                directLighting += saturate(pow(dot(viewDirectionWS, -mainLight.direction) * 1, 3)) * 5 * mainLight.color;
-                half3 sss = directLighting * shadow + GI;
-
-				half4 col = SAMPLE_TEXTURE2D(_SurfaceMap, sampler_SurfaceMap, plane.positionWS.xz);
-
-
-                half lighting = dot(normal,  mainLight.direction);
-
-                // Fresnel
-	            half fresnelTerm = CalculateFresnelTerm(normal, viewDirectionWS);
-
-    BRDFData brdfData;
-    half alpha = 1.0f;
-    InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, alpha, brdfData);
-	half3 spec = DirectBDRF(brdfData, normal, mainLight.direction, viewDirectionWS) * shadow * mainLight.color;
-
-float tempdepth = 2;
-                sss *= Scattering(depth.x);
-
-                // Reflections
-	            half3 reflection = SampleReflections(normal, viewDirectionWS, screenUV.xy, 0.0);
-
-                // Refraction
-                half3 refraction = Refraction(screenUV, depth.x);
-
-	// Do compositing
-	half3 comp = lerp(refraction, reflection, fresnelTerm) + sss + spec; //lerp(refraction, color + reflection + foam, 1-saturate(1-depth.x * 25));
-
-
-				//outColor = half4(reflection * fresnelTerm + spec, 1);
-				//outColor = half4(comp, 1);
 				outDepth = 1-plane.depth;
 			}
 			ENDHLSL
