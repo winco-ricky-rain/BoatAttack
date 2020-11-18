@@ -67,7 +67,10 @@
 
 			void InfiniteWaterFragment(Varyings i, out half4 outColor:SV_Target, out float outDepth : SV_Depth) //: SV_Target
 			{
-                half2 screenUV = i.screenPosition.xy / i.screenPosition.w; // screen UVs
+			    half4 screenUV = 0.0;
+	            screenUV.xy  = i.screenPosition.xy / i.screenPosition.w; // screen UVs
+	            screenUV.zw  = screenUV.xy; // screen UVs
+                //half2 screenUV = i.screenPosition.xy / i.screenPosition.w; // screen UVs
 
                 half4 waterFX = SAMPLE_TEXTURE2D(_WaterFXMap, sampler_ScreenTextures_linear_clamp, screenUV.xy);
 
@@ -75,6 +78,24 @@
 				float3 normal = half3(0.0, 1.0, 0.0);
                 half3 viewDirectionWS = normalize(GetCameraPositionWS() - plane.positionWS);
 				float4 additionalData = float4(1, length(viewDirectionWS), waterFX.w, 1);
+
+                i.positionWS = plane.positionWS;
+                i.normalWS = half3(0.0, 1.0, 0.0);
+                i.viewDirectionWS = normalize(GetCameraPositionWS() - plane.positionWS).xyzz;
+                i.additionalData = additionalData;
+                //i.uv = 
+
+                WaterInputData inputData;
+                InitializeInputData(i, inputData, screenUV.xy);
+
+                WaterSurfaceData surfaceData;
+                InitializeSurfaceData(inputData, surfaceData);
+            
+                half4 color;
+                color.a = 1;
+                color.rgb = WaterShading(inputData, surfaceData, additionalData, screenUV.xy);
+            
+                outColor = color;
 
                 // Depth
 	            float3 depth = WaterDepth(plane.positionWS, additionalData, screenUV.xy);
@@ -119,7 +140,7 @@ float tempdepth = 2;
 
 
 				//outColor = half4(reflection * fresnelTerm + spec, 1);
-				outColor = half4(comp, 1);
+				//outColor = half4(comp, 1);
 				outDepth = 1-plane.depth;
 			}
 			ENDHLSL

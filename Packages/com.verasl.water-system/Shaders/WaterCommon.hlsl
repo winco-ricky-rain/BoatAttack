@@ -162,34 +162,41 @@ Varyings WaveVertexOperations(Varyings input)
 void InitializeInputData(Varyings input, out WaterInputData inputData, float2 screenUV)
 {
     float3 depth = WaterDepth(input.positionWS, input.additionalData, screenUV);// TODO - hardcoded shore depth UVs
+    // Sample water FX texture
+    inputData.waterFX = WaterFX(input.preWaveSP.xy);
 
     inputData.positionWS = input.positionWS;
+    
     inputData.normalWS = input.normalWS;
+    // Detail waves
+    DetailNormals(inputData.normalWS, input.uv, inputData.waterFX, depth);
+    
     inputData.viewDirectionWS = input.viewDirectionWS.xyz;
-    inputData.reflectionUV = 0;
+    
+    half2 distortion = DistortionUVs(depth.x, inputData.normalWS);
+	distortion = screenUV.xy + distortion;// * clamp(depth.x, 0, 5);
+	float d = depth.x;
+	depth.xz = AdjustedDepth(distortion, input.additionalData); // only x y
+	distortion = depth.x < 0 ? screenUV.xy : distortion;
+    inputData.refractionUV = distortion;
+    depth.x = depth.x < 0 ? d : depth.x;
 
     inputData.detailUV = input.uv;
 
     inputData.shadowCoord = TransformWorldToShadowCoord(inputData.normalWS);
 
-    // Sample water FX texture
-    inputData.waterFX = WaterFX(input.preWaveSP.xy);
-
     inputData.fogCoord = input.fogFactorNoise.x;
-    inputData.depth = 0;
-    inputData.refractionUV = DistortionUVs(inputData.depth, inputData.normalWS);
+    inputData.depth = depth.x;
+    inputData.reflectionUV = 0;
     inputData.GI = 0;
 
 }
 
-void InitializeSurfaceData(WaterInputData input, out WaterSurfaceData surfaceData)
+void InitializeSurfaceData(inout WaterInputData input, out WaterSurfaceData surfaceData)
 {
-    // Detail waves
-    DetailNormals(input.normalWS, input.detailUV, input.waterFX, input.depth);
 
     surfaceData.absorption = 0;
 	surfaceData.scattering = 0;
-    surfaceData.normalWS = 0;
 /*
     // Foam
 	half3 foamMap = SAMPLE_TEXTURE2D(_FoamMap, sampler_FoamMap,  IN.uv.zw).rgb; //r=thick, g=medium, b=light
@@ -204,7 +211,7 @@ void InitializeSurfaceData(WaterInputData input, out WaterSurfaceData surfaceDat
     surfaceData.foam = 0;
 }
 
-float3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float2 screenUV)
+float3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float4 additionalData, float2 screenUV)
 {
     // Lighting
 	Light mainLight = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
@@ -213,18 +220,18 @@ float3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float2 s
 
     // SSS
     half3 directLighting = dot(mainLight.direction, half3(0, 1, 0)) * mainLight.color;
-    //directLighting += saturate(pow(dot(input.viewDirectionWS.xyz, -mainLight.direction) * IN.additionalData.z, 3)) * 5 * mainLight.color;
-    //half3 sss = directLighting * shadow + GI;
+    directLighting += saturate(pow(dot(input.viewDirectionWS.xyz, -mainLight.direction) * additionalData.z, 3)) * 5 * mainLight.color;
+    
 
     BRDFData brdfData;
     half alpha = 1;
     InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, alpha, brdfData);
-	half3 spec = DirectBDRF(brdfData, input.normalWS, mainLight.direction, input.viewDirectionWS);// * shadow * mainLight.color;
+	half3 spec = DirectBDRF(brdfData, input.normalWS, mainLight.direction, input.viewDirectionWS) * mainLight.color * shadow;
 
     // Fresnel
 	half fresnelTerm = CalculateFresnelTerm(input.normalWS, input.viewDirectionWS);
 
-    half3 sss = 0;
+    half3 sss = directLighting * shadow + GI;
     sss *= Scattering(input.depth);
 
 	// Reflections
@@ -236,6 +243,7 @@ float3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float2 s
 	// Do compositing
 	half3 output = lerp(lerp(refraction, reflection, fresnelTerm) + sss + spec, surfaceData.foam, surfaceData.foamMask);
 
+    //return refraction;
     return MixFog(output, input.fogCoord);
 }
 
@@ -272,9 +280,9 @@ half4 WaterFragment(Varyings IN) : SV_Target
     WaterSurfaceData surfaceData;
     InitializeSurfaceData(inputData, surfaceData);
 
-    half4 color;
-    color.a = 1;
-    color.rgb = WaterShading(inputData, surfaceData, screenUV.xy);
+    half4 current;
+    current.a = 1;
+    current.rgb = WaterShading(inputData, surfaceData, IN.additionalData, screenUV.xy);
 
     //return color;
 
@@ -359,6 +367,12 @@ half4 WaterFragment(Varyings IN) : SV_Target
     float3 camPos = GetCameraPositionWS();
     camPos.y = 0;
     float alpha = 1 - saturate((distance(IN.positionWS, camPos) - 50) * 1);
+
+    //return half4(IN.additionalData.www, alpha);
+    
+    half3 old = comp;
+    half fiftyfifty = round(screenUV.x);
+    return half4(lerp(old, current.rgb, fiftyfifty), alpha);
 
 #if defined(_DEBUG_FOAM)
     return half4(foamMask.xxx, 1);
