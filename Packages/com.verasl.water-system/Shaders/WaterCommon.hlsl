@@ -251,7 +251,7 @@ float WaterNearFade(float3 positionWS)
 {
     float3 camPos = GetCameraPositionWS();
     camPos.y = 0;
-    return 1 - saturate((distance(positionWS, camPos) - 50) * 1);
+    return 1 - saturate((distance(positionWS, camPos) - 50) * 0.1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

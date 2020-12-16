@@ -53,7 +53,7 @@
 
 				float3 cameraOffset = GetCameraPositionWS();
 				//input.positionOS.y *= abs(cameraOffset.y) + 1;
-				cameraOffset.y *= 0.0;
+				cameraOffset.y -= 25.0;
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz + cameraOffset);
 				output.positionCS = vertexInput.positionCS;
 				output.screenPosition = ComputeScreenPos(vertexInput.positionCS);
