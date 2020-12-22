@@ -218,7 +218,7 @@ namespace WaterSystem
                     _causticMaterial.SetFloat(SrcBlend, 2f);
                     _causticMaterial.SetFloat(DstBlend, 0f);
                     _causticMaterial.DisableKeyword("_DEBUG");
-                    m_CausticsPass.renderPassEvent = RenderPassEvent.AfterRenderingSkybox + 1;
+                    m_CausticsPass.renderPassEvent = RenderPassEvent.AfterRenderingOpaques;
                     // WaterEffects
                     break;
             }
