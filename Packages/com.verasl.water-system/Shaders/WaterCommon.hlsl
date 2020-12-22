@@ -169,7 +169,7 @@ void InitializeInputData(Varyings input, out WaterInputData inputData, float2 sc
     
     inputData.normalWS = input.normalWS;
     // Detail waves
-    DetailNormals(inputData.normalWS, input.uv, inputData.waterFX, depth);
+    DetailNormals(inputData.normalWS, input.uv, inputData.waterFX, depth.x);
     
     inputData.viewDirectionWS = input.viewDirectionWS.xyz;
     
@@ -320,7 +320,7 @@ half4 WaterFragment(Varyings IN) : SV_Target
 
 	// Lighting
 	Light mainLight = GetMainLight(TransformWorldToShadowCoord(IN.positionWS));
-    half shadow = SoftShadows(screenUV, IN.positionWS, IN.viewDirectionWS.xyz, depth.x);
+    half shadow = SoftShadows(screenUV.xy, IN.positionWS, IN.viewDirectionWS.xyz, depth.x);
     half3 GI = SampleSH(IN.normalWS);
 
     // SSS
@@ -345,7 +345,7 @@ half4 WaterFragment(Varyings IN) : SV_Target
     BRDFData brdfData;
     half a = 1;
     InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, a, brdfData);
-	half3 spec = DirectBDRF(brdfData, IN.normalWS, mainLight.direction, IN.viewDirectionWS) * shadow * mainLight.color;
+	half3 spec = DirectBDRF(brdfData, IN.normalWS, mainLight.direction, IN.viewDirectionWS.xyz) * shadow.xxx * mainLight.color;
 #ifdef _ADDITIONAL_LIGHTS
     uint pixelLightCount = GetAdditionalLightsCount();
     for (uint lightIndex = 0u; lightIndex < pixelLightCount; ++lightIndex)
