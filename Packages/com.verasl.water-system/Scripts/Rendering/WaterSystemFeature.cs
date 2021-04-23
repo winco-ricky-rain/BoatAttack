@@ -61,10 +61,54 @@ namespace WaterSystem
                 CommandBufferPool.Release(cmd);
             }
 
-            public override void OnCameraCleanup(CommandBuffer cmd) 
+            public override void OnCameraCleanup(CommandBuffer cmd)
             {
                 // since the texture is used within the single cameras use we need to cleanup the RT afterwards
                 cmd.ReleaseTemporaryRT(m_WaterFX.id);
+            }
+        }
+
+        #endregion
+
+        #region InfiniteWater Pass
+
+        class InfiniteWaterPass : ScriptableRenderPass
+        {
+            private Mesh infiniteMesh;
+            private Material infiniteMaterial;
+
+            public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+            {
+                if(infiniteMesh == null)
+                    infiniteMesh = GenerateCausticsMesh(2f);
+
+                if (infiniteMaterial == null)
+                    infiniteMaterial = CoreUtils.CreateEngineMaterial("BoatAttack/InfiniteWater");
+
+                if(!infiniteMaterial || !infiniteMesh) return;
+
+                Camera cam = renderingData.cameraData.camera;
+
+                if(cam.cameraType != CameraType.Game && cam.cameraType != CameraType.SceneView) return;
+
+                CommandBuffer cmd = CommandBufferPool.Get();
+                using (new ProfilingScope(cmd, new ProfilingSampler("Infinite Water")))
+                {
+
+                    var probe = RenderSettings.ambientProbe;
+
+                    // Create the matrix to position the caustics mesh.
+                    var position = cam.transform.position;
+                    position.y = 0; // TODO should read a global 'water height' variable.
+                    var matrix = Matrix4x4.TRS(position, Quaternion.identity, Vector3.one);
+                    // Setup the CommandBuffer and draw the mesh with the caustic material and matrix
+                    MaterialPropertyBlock matBloc = new MaterialPropertyBlock();
+                    matBloc.CopySHCoefficientArraysFrom(new []{probe});
+                    cmd.DrawMesh(infiniteMesh, matrix, infiniteMaterial, 0, 0);
+
+                    context.ExecuteCommandBuffer(cmd);
+                    CommandBufferPool.Release(cmd);
+                }
             }
         }
 
@@ -83,8 +127,9 @@ namespace WaterSystem
             {
                 var cam = renderingData.cameraData.camera;
                 // Stop the pass rendering in the preview or material missing
-                if (cam.cameraType == CameraType.Preview || !WaterCausticMaterial)
-                    return;
+                if (!WaterCausticMaterial) return;
+
+                if(cam.cameraType != CameraType.Game && cam.cameraType != CameraType.SceneView) return;
 
                 CommandBuffer cmd = CommandBufferPool.Get();
                 using (new ProfilingScope(cmd, m_WaterCaustics_Profile))
@@ -93,8 +138,8 @@ namespace WaterSystem
                         ? RenderSettings.sun.transform.localToWorldMatrix
                         : Matrix4x4.TRS(Vector3.zero, Quaternion.Euler(-45f, 45f, 0f), Vector3.one);
                     WaterCausticMaterial.SetMatrix("_MainLightDir", sunMatrix);
-                
-                
+
+
                     // Create mesh if needed
                     if (!m_mesh)
                         m_mesh = GenerateCausticsMesh(1000f);
@@ -114,6 +159,7 @@ namespace WaterSystem
 
         #endregion
 
+        InfiniteWaterPass m_InfiniteWaterPass;
         WaterFxPass m_WaterFxPass;
         WaterCausticsPass m_CausticsPass;
 
@@ -130,6 +176,9 @@ namespace WaterSystem
 
         public override void Create()
         {
+            // InfiniteWater Pass
+            m_InfiniteWaterPass = new InfiniteWaterPass{renderPassEvent = RenderPassEvent.BeforeRenderingTransparents};
+
             // WaterFX Pass
             m_WaterFxPass = new WaterFxPass {renderPassEvent = RenderPassEvent.BeforeRenderingOpaques};
 
@@ -144,7 +193,7 @@ namespace WaterSystem
             }
             _causticMaterial = CoreUtils.CreateEngineMaterial(causticShader);
             _causticMaterial.SetFloat("_BlendDistance", settings.causticBlendDistance);
-            
+
             if (causticTexture == null)
             {
                 Debug.Log("Caustics Texture missing, attempting to load.");
@@ -153,7 +202,7 @@ namespace WaterSystem
 #endif
             }
             _causticMaterial.SetTexture(CausticTexture, causticTexture);
-            
+
             switch (settings.debug)
             {
                 case WaterSystemSettings.DebugMode.Caustics:
@@ -180,6 +229,7 @@ namespace WaterSystem
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
+            renderer.EnqueuePass(m_InfiniteWaterPass);
             renderer.EnqueuePass(m_WaterFxPass);
             renderer.EnqueuePass(m_CausticsPass);
         }
@@ -189,17 +239,17 @@ namespace WaterSystem
         /// </summary>
         /// <param name="size">The length of the quad.</param>
         /// <returns></returns>
-        private static Mesh GenerateCausticsMesh(float size)
+        public static Mesh GenerateCausticsMesh(float size, bool flat = true)
         {
             var m = new Mesh();
             size *= 0.5f;
 
             var verts = new[]
             {
-                new Vector3(-size, 0f, -size),
-                new Vector3(size, 0f, -size),
-                new Vector3(-size, 0f, size),
-                new Vector3(size, 0f, size)
+                new Vector3(-size, flat ? 0f : -size, flat ? -size : 0f),
+                new Vector3(size, flat ? 0f : -size, flat ? -size : 0f),
+                new Vector3(-size, flat ? 0f : size, flat ? size : 0f),
+                new Vector3(size, flat ? 0f : size, flat ? size : 0f)
             };
             m.vertices = verts;
 

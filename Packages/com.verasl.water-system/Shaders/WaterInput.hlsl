@@ -61,6 +61,16 @@ struct Varyings // fragment struct
 	UNITY_VERTEX_OUTPUT_STEREO
 };
 
+struct VaryingsInfinite // infinite water Varyings
+{
+	float3	nearPosition			: TEXCOORD0;	// near position of the vertices
+    float3	farPosition				: TEXCOORD1;	// far position of the vertices
+	float3	positionWS				: TEXCOORD2;	// world position of the vertices
+	float4 	viewDirectionWS 		: TEXCOORD3;	// view direction
+    half4	screenPosition			: TEXCOORD4;	// screen position after the waves
+    float4  positionCS              : SV_POSITION;
+};
+
 struct WaterSurfaceData
 {
     half3   absorption;
