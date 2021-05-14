@@ -215,7 +215,7 @@ float3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float4 a
 {
     // Lighting
 	Light mainLight = GetMainLight(TransformWorldToShadowCoord(input.positionWS));
-    half shadow = SoftShadows(screenUV, input.positionWS);
+    half shadow = SoftShadows(screenUV, input.positionWS, input.viewDirectionWS, input.depth);
     half3 GI = SampleSH(input.normalWS);
 
     // SSS
@@ -245,6 +245,13 @@ float3 WaterShading(WaterInputData input, WaterSurfaceData surfaceData, float4 a
 
     //return refraction;
     return MixFog(output, input.fogCoord);
+}
+
+float WaterNearFade(float3 positionWS)
+{
+    float3 camPos = GetCameraPositionWS();
+    camPos.y = 0;
+    return 1 - saturate((distance(positionWS, camPos) - 50) * 0.1);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -281,10 +288,10 @@ half4 WaterFragment(Varyings IN) : SV_Target
     InitializeSurfaceData(inputData, surfaceData);
 
     half4 current;
-    current.a = 1;
+    current.a = WaterNearFade(IN.positionWS);
     current.rgb = WaterShading(inputData, surfaceData, IN.additionalData, screenUV.xy);
 
-    //return color;
+    return current;
 
     ////////////////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////////////////
@@ -299,9 +306,21 @@ half4 WaterFragment(Varyings IN) : SV_Target
     // Detail waves
     DetailNormals(IN.normalWS, IN.uv, waterFX, depth.x);
 
+    // Distortion
+	half2 distortion = DistortionUVs(depth.x, IN.normalWS);
+	distortion = screenUV.xy + distortion;// * clamp(depth.x, 0, 5);
+	float d = depth.x;
+	depth.xz = AdjustedDepth(distortion, IN.additionalData);
+	distortion = depth.x < 0 ? screenUV.xy : distortion;
+	depth.x = depth.x < 0 ? d : depth.x;
+
+    // Fresnel
+	half fresnelTerm = CalculateFresnelTerm(IN.normalWS, IN.viewDirectionWS.xyz);
+	//return fresnelTerm.xxxx;
+
 	// Lighting
 	Light mainLight = GetMainLight(TransformWorldToShadowCoord(IN.positionWS));
-    half shadow = SoftShadows(screenUV.xy, IN.positionWS);
+    half shadow = SoftShadows(screenUV, IN.positionWS, IN.viewDirectionWS.xyz, depth.x);
     half3 GI = SampleSH(IN.normalWS);
 
     // SSS
@@ -323,21 +342,10 @@ half4 WaterFragment(Varyings IN) : SV_Target
 	// Foam lighting
 	half3 foam = foamMask.xxx * (mainLight.shadowAttenuation * mainLight.color + GI);
 
-	// Distortion
-	half2 distortion = DistortionUVs(depth.x, IN.normalWS);
-	distortion = screenUV.xy + distortion;// * clamp(depth.x, 0, 5);
-	float d = depth.x;
-	depth.xz = AdjustedDepth(distortion, IN.additionalData); // only x y
-	distortion = depth.x < 0 ? screenUV.xy : distortion;
-	depth.x = depth.x < 0 ? d : depth.x;
-
-	// Fresnel
-	half fresnelTerm = CalculateFresnelTerm(IN.normalWS, IN.viewDirectionWS.xyz);
-
     BRDFData brdfData;
     half a = 1;
     InitializeBRDFData(half3(0, 0, 0), 0, half3(1, 1, 1), 0.95, a, brdfData);
-	half3 spec = DirectBDRF(brdfData, IN.normalWS, mainLight.direction, IN.viewDirectionWS.xyz) * shadow * mainLight.color;
+	half3 spec = DirectBDRF(brdfData, IN.normalWS, mainLight.direction, IN.viewDirectionWS) * shadow * mainLight.color;
 #ifdef _ADDITIONAL_LIGHTS
     uint pixelLightCount = GetAdditionalLightsCount();
     for (uint lightIndex = 0u; lightIndex < pixelLightCount; ++lightIndex)
