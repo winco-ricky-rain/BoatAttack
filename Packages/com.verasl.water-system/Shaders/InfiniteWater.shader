@@ -12,6 +12,7 @@
 	{
 		Tags { "RenderType"="Transparent" "Queue"="Transparent-101" "RenderPipeline" = "UniversalPipeline" }
 		ZWrite off
+		Cull off
 
 		Pass
 		{
@@ -43,6 +44,15 @@
 			#pragma vertex InfiniteWaterVertex
 			#pragma fragment InfiniteWaterFragment
 
+		    //float4x4 _InvViewProjection;
+
+            float3 UnprojectPoint(float3 p)
+            {
+                float4x4 mat = mul(unity_MatrixV, glstate_matrix_projection);
+                float4 unprojectedPoint =  mul(mat, float4(p, 1));
+                return unprojectedPoint.xyz / unprojectedPoint.w;
+            }
+
 			Varyings InfiniteWaterVertex(Attributes input)
 			{
 				Varyings output = (Varyings)0;
@@ -53,9 +63,21 @@
 
 				float3 cameraOffset = GetCameraPositionWS();
 				//input.positionOS.y *= abs(cameraOffset.y) + 1;
-				cameraOffset.y -= 25.0;
-                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz + cameraOffset);
+				//input.positionOS.xz = input.positionOS.y < 0 ? half2(0, 0) : input.positionOS.xz;
+				input.positionOS.xz *= 1000;
+				//input.positionOS = 1000;
+
+				//cameraOffset.y *= 0.0;
+                VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
 				output.positionCS = vertexInput.positionCS;
+
+				//float3 pos = output.positionCS;
+				//pos.z = _ProjectionParams.y;
+				//output.positionWS = UnprojectPoint(pos); // near position
+				//pos.z = _ProjectionParams.z;
+				//output.preWaveSP = UnprojectPoint(pos); // far postion
+
+				output.positionWS = vertexInput.positionWS;
 				output.screenPosition = ComputeScreenPos(vertexInput.positionCS);
 
 				float3 viewPos = vertexInput.positionVS;
@@ -65,8 +87,13 @@
 				return output;
 			}
 
-			void InfiniteWaterFragment(Varyings i, out half4 outColor:SV_Target, out float outDepth : SV_Depth) //: SV_Target
+			half4 InfiniteWaterFragment(Varyings i) : SV_Target
 			{
+			    //float t = -i.positionWS.y / (i.preWaveSP.y - i.positionWS.y);
+
+			    //if(t > 0)
+			    //    discard;
+
 			    half4 screenUV = 0.0;
 	            screenUV.xy  = i.screenPosition.xy / i.screenPosition.w; // screen UVs
 	            screenUV.zw  = screenUV.xy; // screen UVs
@@ -75,15 +102,15 @@
                 half4 waterFX = SAMPLE_TEXTURE2D(_WaterFXMap, sampler_ScreenTextures_linear_clamp, screenUV.xy);
 
 				InfinitePlane plane = WorldPlane(i.screenPosition, i.viewDirectionWS);
+				i.positionWS = plane.positionWS;
 				float3 normal = half3(0.0, 1.0, 0.0);
-                half3 viewDirectionWS = normalize(GetCameraPositionWS() - plane.positionWS);
+                half3 viewDirectionWS = normalize(GetCameraPositionWS() - i.positionWS);
 				float4 additionalData = float4(1, length(viewDirectionWS), waterFX.w, 1);
 
-                i.positionWS = plane.positionWS;
                 i.normalWS = half3(0.0, 1.0, 0.0);
-                i.viewDirectionWS = normalize(GetCameraPositionWS() - plane.positionWS).xyzz;
+                i.viewDirectionWS = normalize(GetCameraPositionWS() - i.positionWS).xyzz;
                 i.additionalData = additionalData;
-                i.uv = DetailUVs(plane.positionWS * (1 / _Size), 1);
+                i.uv = DetailUVs(i.positionWS * (1 / _Size), 1);
 
                 WaterInputData inputData;
                 InitializeInputData(i, inputData, screenUV.xy);
@@ -95,8 +122,10 @@
                 color.a = 1;
                 color.rgb = WaterShading(inputData, surfaceData, additionalData, screenUV.xy);
 
-                outColor = color;
-				outDepth = 1-plane.depth;
+                //outColor = half4(frac(i.positionWS), 1); //color;
+				//outDepth = 1;// 1-plane.depth;
+				//return half4(frac(plane.positionWS * 0.1), 1);
+				return color;
 			}
 			ENDHLSL
 		}
