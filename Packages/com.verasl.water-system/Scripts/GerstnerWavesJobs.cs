@@ -5,7 +5,6 @@ using Unity.Burst;
 using Unity.Mathematics;
 using Unity.Collections;
 using UnityEngine.Rendering.Universal;
-using WaterSystem.Data;
 
 namespace WaterSystem
 {

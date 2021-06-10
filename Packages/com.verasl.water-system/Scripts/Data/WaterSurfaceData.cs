@@ -2,7 +2,7 @@
 using Unity.Mathematics;
 using UnityEngine;
 
-namespace WaterSystem.Data
+namespace WaterSystem
 {
     /// <summary>
     /// This scriptable object contains setting for how the water looks visually

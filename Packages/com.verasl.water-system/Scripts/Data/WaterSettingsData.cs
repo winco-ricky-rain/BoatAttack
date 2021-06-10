@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
-namespace WaterSystem.Data
+namespace WaterSystem
 {
 	/// <summary>
 	/// This scriptable object stores teh graphical/rendering settings for a water system
